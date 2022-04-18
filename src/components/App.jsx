@@ -1,21 +1,18 @@
 import axios from 'axios';
+import { toast } from 'react-toastify';
+import { animateScroll as scroll } from 'react-scroll';
+import { ToastContainer } from 'react-toastify';
+import { Component } from 'react';
 
 import { Searchbar } from './Searchbar/Searchbar';
 import { ImageGallery } from './ImageGallery/ImageGallery';
 import { Button } from './Button/Button';
 import { Modal } from './Modal/Modal';
+import { Loader } from './Loader/Loader';
 
 import { Container } from './App.styled';
 
-import { Component } from 'react';
-
-import { ToastContainer } from 'react-toastify';
-import { BallTriangle } from 'react-loader-spinner';
 import 'react-toastify/dist/ReactToastify.css';
-
-import { toast } from 'react-toastify';
-
-import { animateScroll as scroll } from 'react-scroll';
 
 const BASE_URL = 'https://pixabay.com/api';
 const API_KEY = '25251210-ac1999c1ffdbc1fb6fbdee37e';
@@ -33,11 +30,13 @@ export class App extends Component {
   };
 
   async componentDidUpdate(prevProps, prevState) {
-    if (prevState.page !== this.state.page) {
+    const { page, searchQuery, per_page } = this.state;
+    const { scrollWindow } = this;
+    if (prevState.page !== page && page !== 1) {
       try {
         this.setState({ isLoading: true });
         const response = await axios.get(
-          `${BASE_URL}/?key=${API_KEY}&q=${this.state.searchQuery}&image_type=photo&orientation=horizontal&safesearch=true&page=${this.state.page}&per_page=${this.state.per_page}`
+          `${BASE_URL}/?key=${API_KEY}&q=${searchQuery}&image_type=photo&orientation=horizontal&safesearch=true&page=${page}&per_page=${per_page}`
         );
         const images = await response.data;
         this.setState(prevState => {
@@ -47,42 +46,38 @@ export class App extends Component {
             sumHits: prevState.sumHits + images.hits.length,
           };
         });
-        this.scrollWindow();
+        scrollWindow();
         totalHits = images.totalHits;
       } catch (error) {
         this.setState({ isLoading: false });
-        console.log(error);
-      }
-    }
-    if (prevState.searchQuery !== this.state.searchQuery) {
-      try {
-        this.setState({ isLoading: true });
-        const response = await axios.get(
-          `${BASE_URL}/?key=${API_KEY}&q=${this.state.searchQuery}&image_type=photo&orientation=horizontal&safesearch=true&page=${this.state.page}&per_page=${this.state.per_page}`
-        );
-        const images = await response.data;
-        if (images.hits.length === 0) {
-          this.setState({ isLoading: false });
-          toast.error('There are no images matching your search query');
-          return;
-        }
-        this.setState(prevState => {
-          return {
-            gallery: images.hits,
-            isLoading: false,
-          };
-        });
-        this.state.sumHits = images.hits.length;
-        totalHits = images.totalHits;
-      } catch (error) {
-        this.setState({ isLoading: false });
-        console.log(error);
+        toast.error(`${error}`);
       }
     }
   }
 
-  onSubmit = searchQuery => {
-    this.setState({ searchQuery });
+  onSubmit = async queryValue => {
+    const { per_page } = this.state;
+    try {
+      this.setState({ isLoading: true, searchQuery: queryValue });
+      const response = await axios.get(
+        `${BASE_URL}/?key=${API_KEY}&q=${queryValue}&image_type=photo&orientation=horizontal&safesearch=true&page=1&per_page=${per_page}`
+      );
+      const images = await response.data;
+      if (images.hits.length === 0) {
+        this.setState({ isLoading: false });
+        toast.error('There are no images matching your search query');
+        return;
+      }
+      this.setState({
+        gallery: images.hits,
+        isLoading: false,
+        sumHits: images.hits.length,
+      });
+      totalHits = images.totalHits;
+    } catch (error) {
+      this.setState({ isLoading: false });
+      toast.error(`${error}`);
+    }
   };
 
   loadMore = () => {
@@ -113,9 +108,11 @@ export class App extends Component {
   };
 
   openLargeImage = id => {
-    this.state.gallery.map(image => {
+    const { toggleModal } = this;
+    const { gallery } = this.state;
+    gallery.map(image => {
       if (image.id === id) {
-        this.toggleModal();
+        toggleModal();
         return this.setState({ largeImage: image });
       }
       return image;
@@ -123,39 +120,23 @@ export class App extends Component {
   };
 
   render() {
+    const { resetPage, onSubmit, openLargeImage, loadMore, toggleModal } = this;
+    const { isLoading, gallery, sumHits, showModal, largeImage } = this.state;
     return (
       <Container>
-        <Searchbar resetPage={this.resetPage} onSubmit={this.onSubmit} />
-        {this.state.isLoading && !this.state.gallery.length ? (
-          <BallTriangle
-            color="#00BFFF"
-            height={80}
-            width={80}
-            wrapperStyle={{ margin: '0 auto' }}
-          />
+        <Searchbar resetPage={resetPage} onSubmit={onSubmit} />
+        {isLoading && !gallery.length ? (
+          <Loader />
         ) : (
-          <ImageGallery
-            gallery={this.state.gallery}
-            openLargeImage={this.openLargeImage}
-          />
+          <ImageGallery gallery={gallery} openLargeImage={openLargeImage} />
         )}
-        {this.state.isLoading && this.state.gallery.length && (
-          <BallTriangle
-            color="#00BFFF"
-            height={80}
-            width={80}
-            wrapperStyle={{ margin: '0 auto' }}
-          />
+        {isLoading && gallery.length && <Loader />}
+        {totalHits !== sumHits && gallery.length > 0 && isLoading === false && (
+          <Button loadMore={loadMore} />
         )}
-        {totalHits !== this.state.sumHits &&
-          this.state.gallery.length > 0 &&
-          this.state.isLoading === false && <Button loadMore={this.loadMore} />}
         <ToastContainer />
-        {this.state.showModal && (
-          <Modal
-            toggleModal={this.toggleModal}
-            largeImage={this.state.largeImage}
-          />
+        {showModal && (
+          <Modal toggleModal={toggleModal} largeImage={largeImage} />
         )}
       </Container>
     );
