@@ -12,7 +12,6 @@ import {
 export class Searchbar extends Component {
   static propTypes = {
     onSubmit: PropTypes.func.isRequired,
-    resetPage: PropTypes.func.isRequired,
   };
 
   state = {
@@ -24,7 +23,7 @@ export class Searchbar extends Component {
   };
 
   handleSubmit = e => {
-    const { onSubmit, resetPage } = this.props;
+    const { onSubmit } = this.props;
     const { searchQuery } = this.state;
     const { resetForm } = this;
     e.preventDefault();
@@ -33,7 +32,6 @@ export class Searchbar extends Component {
       return;
     }
     onSubmit(searchQuery);
-    resetPage();
     resetForm();
   };
 

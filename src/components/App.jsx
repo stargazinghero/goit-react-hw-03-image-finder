@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { toast } from 'react-toastify';
 import { animateScroll as scroll } from 'react-scroll';
 import { ToastContainer } from 'react-toastify';
@@ -14,9 +13,10 @@ import { Container } from './App.styled';
 
 import 'react-toastify/dist/ReactToastify.css';
 
-const BASE_URL = 'https://pixabay.com/api';
-const API_KEY = '25251210-ac1999c1ffdbc1fb6fbdee37e';
+import * as API from 'services/api';
+
 let totalHits = 0;
+let sumHits = 0;
 export class App extends Component {
   state = {
     gallery: [],
@@ -24,30 +24,29 @@ export class App extends Component {
     searchQuery: '',
     per_page: 12,
     isLoading: false,
-    sumHits: 0,
     showModal: false,
     largeImage: [],
   };
 
   async componentDidUpdate(prevProps, prevState) {
     const { page, searchQuery, per_page } = this.state;
-    const { scrollWindow } = this;
-    if (prevState.page !== page && page !== 1) {
+    if (prevState.page !== page || prevState.searchQuery !== searchQuery) {
       try {
         this.setState({ isLoading: true });
-        const response = await axios.get(
-          `${BASE_URL}/?key=${API_KEY}&q=${searchQuery}&image_type=photo&orientation=horizontal&safesearch=true&page=${page}&per_page=${per_page}`
-        );
-        const images = await response.data;
+        const images = await API.getImages(searchQuery, page, per_page);
+        if (images.hits.length === 0) {
+          this.setState({ isLoading: false });
+          toast.error('There are no images matching your search query');
+          return;
+        }
         this.setState(prevState => {
           return {
             gallery: [...prevState.gallery, ...images.hits],
             isLoading: false,
-            sumHits: prevState.sumHits + images.hits.length,
           };
         });
-        scrollWindow();
         totalHits = images.totalHits;
+        sumHits += images.hits.length;
       } catch (error) {
         this.setState({ isLoading: false });
         toast.error(`${error}`);
@@ -55,29 +54,14 @@ export class App extends Component {
     }
   }
 
-  onSubmit = async queryValue => {
-    const { per_page } = this.state;
-    try {
-      this.setState({ isLoading: true, searchQuery: queryValue });
-      const response = await axios.get(
-        `${BASE_URL}/?key=${API_KEY}&q=${queryValue}&image_type=photo&orientation=horizontal&safesearch=true&page=1&per_page=${per_page}`
-      );
-      const images = await response.data;
-      if (images.hits.length === 0) {
-        this.setState({ isLoading: false });
-        toast.error('There are no images matching your search query');
-        return;
-      }
-      this.setState({
-        gallery: images.hits,
-        isLoading: false,
-        sumHits: images.hits.length,
-      });
-      totalHits = images.totalHits;
-    } catch (error) {
-      this.setState({ isLoading: false });
-      toast.error(`${error}`);
-    }
+  onSubmit = queryValue => {
+    this.setState({
+      gallery: [],
+      isLoading: false,
+      page: 1,
+      searchQuery: queryValue,
+    });
+    sumHits = 0;
   };
 
   loadMore = () => {
@@ -86,10 +70,7 @@ export class App extends Component {
         page: prevState.page + 1,
       };
     });
-  };
-
-  resetPage = () => {
-    this.setState({ page: 1 });
+    this.scrollWindow();
   };
 
   scrollWindow = () => {
@@ -120,11 +101,11 @@ export class App extends Component {
   };
 
   render() {
-    const { resetPage, onSubmit, openLargeImage, loadMore, toggleModal } = this;
-    const { isLoading, gallery, sumHits, showModal, largeImage } = this.state;
+    const { onSubmit, openLargeImage, loadMore, toggleModal } = this;
+    const { isLoading, gallery, showModal, largeImage } = this.state;
     return (
       <Container>
-        <Searchbar resetPage={resetPage} onSubmit={onSubmit} />
+        <Searchbar onSubmit={onSubmit} />
         {isLoading && !gallery.length ? (
           <Loader />
         ) : (
